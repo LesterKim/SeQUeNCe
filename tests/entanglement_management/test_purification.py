@@ -46,7 +46,7 @@ psi_plus = [0, 0.5 ** 0.5, 0.5 ** 0.5, 0]
 psi_minus = [0, 0.5 ** 0.5, -(0.5 ** 0.5), 0]
 
 
-def create_scenario(state1, state2, seed):
+def create_scenario(state1, state2, seed, basis='Z'):
     tl = Timeline()
     tl.seed(seed)
     a1 = FakeNode("a1", tl)
@@ -74,8 +74,8 @@ def create_scenario(state1, state2, seed):
     meas2.entangled_memory = {'node_id': 'a1', 'memo_id': 'meas1'}
     kept1.fidelity = kept2.fidelity = meas1.fidelity = meas2.fidelity = 1
 
-    ep1 = BBPSSW(a1, "a1.ep1", kept1, meas1)
-    ep2 = BBPSSW(a2, "a2.ep2", kept2, meas2)
+    ep1 = BBPSSW(a1, "a1.ep1", kept1, meas1, basis)
+    ep2 = BBPSSW(a2, "a2.ep2", kept2, meas2, basis)
     a1.protocols.append(ep1)
     a2.protocols.append(ep2)
     ep1.set_others(ep2)
@@ -93,7 +93,7 @@ def create_scenario(state1, state2, seed):
 
 def complex_array_equal(arr1, arr2, precision=5):
     for c1, c2 in zip(arr1, arr2):
-        if abs(c1 - c2) >= 1 ** -precision:
+        if abs(c1 - c2) >= 2 ** -precision:
             return False
     return True
 
@@ -598,9 +598,507 @@ def test_BBPSSW_psi_minus_psi_minus():
 
         if ep1.meas_res == 0:
             counter += 1
-            assert complex_array_equal(phi_plus, state)
+            assert complex_array_equal(psi_plus, state)
         else:
             assert complex_array_equal([0, -sqrt_2, -sqrt_2, 0], state)
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_phi_plus_phi_plus_X_measurement():
+    """
+    phi+ phi+
+     0b0
+         [0.5+0.j 0. +0.j 0. +0.j 0.5+0.j]
+     0b1
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b10
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b11
+         [0.5+0.j 0. +0.j 0. +0.j 0.5+0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(phi_plus, phi_plus, i, 'X')
+        assert kept1.entangled_memory == {'node_id': 'a2', 'memo_id': 'kept2'}
+        assert kept2.entangled_memory == {'node_id': 'a1', 'memo_id': 'kept1'}
+        assert ep1.meas_res == ep2.meas_res
+        if ep1.meas_res == 0:
+            counter += 1
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) == id(ket2)
+        assert kept1.qstate_key in ket1.keys and kept2.qstate_key in ket1.keys
+        state = correct_order(ket1.state, ket1.keys)
+        assert complex_array_equal(phi_plus, state)
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_phi_plus_phi_minus_X_measurement():
+    """
+    phi+ phi-
+     0b0
+         [ 0.5+0.j  0. +0.j  0. +0.j -0.5+0.j]
+     0b1
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b10
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b11
+         [-0.5+0.j  0. +0.j  0. +0.j  0.5+0.j]
+
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(phi_plus, phi_minus, i, 'X')
+        assert kept1.entangled_memory == kept2.entangled_memory == {'node_id': None, 'memo_id': None}
+        assert ep1.meas_res != ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) != id(ket2)
+        assert len(ket1.keys) == len(ket2.keys) == 1
+
+        if ep1.meas_res == 0:
+            counter += 1
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_phi_minus_phi_plus_X_measurement():
+    """
+    phi- phi+
+     0b0
+         [ 0.5+0.j  0. +0.j  0. +0.j -0.5+0.j]
+     0b1
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b10
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b11
+         [ 0.5+0.j  0. +0.j  0. +0.j -0.5+0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(phi_minus, phi_plus, i, 'X')
+        assert kept1.entangled_memory == {'node_id': 'a2', 'memo_id': 'kept2'}
+        assert kept2.entangled_memory == {'node_id': 'a1', 'memo_id': 'kept1'}
+        assert ep1.meas_res == ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) == id(ket2)
+        assert kept1.qstate_key in ket1.keys and kept2.qstate_key in ket1.keys
+        state = correct_order(ket1.state, ket1.keys)
+
+        assert complex_array_equal(phi_minus, state)
+        if ep1.meas_res == 0:
+            counter += 1
+        else:
+            pass
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_phi_minus_phi_minus_X_measurement():
+    """
+    phi- phi-
+     0b0
+         [0.5+0.j 0. +0.j 0. +0.j 0.5+0.j]
+     0b1
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b10
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b11
+         [-0.5+0.j  0. +0.j  0. +0.j -0.5+0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(phi_minus, phi_minus, i, 'X')
+        assert kept1.entangled_memory == kept2.entangled_memory == {'node_id': None, 'memo_id': None}
+        assert ep1.meas_res != ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) != id(ket2)
+        assert len(ket1.keys) == len(ket2.keys) == 1
+
+        if ep1.meas_res == 0:
+            counter += 1
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_phi_plus_psi_plus_X_measurement():
+    """
+    phi+ psi+
+     0b0
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b1
+         [0.5+0.j 0. +0.j 0. +0.j 0.5+0.j]
+     0b10
+         [0.5+0.j 0. +0.j 0. +0.j 0.5+0.j]
+     0b11
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(phi_plus, psi_plus, i, 'X')
+        assert kept1.entangled_memory == {'node_id': 'a2', 'memo_id': 'kept2'}
+        assert kept2.entangled_memory == {'node_id': 'a1', 'memo_id': 'kept1'}
+        assert ep1.meas_res == ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) == id(ket2)
+        assert kept1.qstate_key in ket1.keys and kept2.qstate_key in ket1.keys
+        state = correct_order(ket1.state, ket1.keys)
+
+        if ep1.meas_res == 0:
+            counter += 1
+            assert complex_array_equal(phi_plus, state)
+        else:
+            assert complex_array_equal([-sqrt_2, 0, 0, -sqrt_2], state)
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_phi_plus_psi_minus_X_measurement():
+    """
+    phi+ psi-
+     0b0
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b1
+         [ 0.5+0.j  0. +0.j  0. +0.j -0.5+0.j]
+     0b10
+         [-0.5+0.j  0. +0.j  0. +0.j  0.5+0.j]
+     0b11
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(phi_plus, psi_minus, i)
+        assert kept1.entangled_memory == kept2.entangled_memory == {'node_id': None, 'memo_id': None}
+        assert ep1.meas_res != ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) != id(ket2)
+        assert len(ket1.keys) == len(ket2.keys) == 1
+
+        if ep1.meas_res == 0:
+            counter += 1
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_phi_minus_psi_plus_X_measurement():
+    """
+    phi- psi+
+     0b0
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b1
+         [ 0.5+0.j  0. +0.j  0. +0.j -0.5+0.j]
+     0b10
+         [ 0.5+0.j  0. +0.j  0. +0.j -0.5+0.j]
+     0b11
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(phi_minus, psi_plus, i, 'X')
+        assert kept1.entangled_memory == {'node_id': 'a2', 'memo_id': 'kept2'}
+        assert kept2.entangled_memory == {'node_id': 'a1', 'memo_id': 'kept1'}
+        assert ep1.meas_res == ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) == id(ket2)
+        assert kept1.qstate_key in ket1.keys and kept2.qstate_key in ket1.keys
+        state = correct_order(ket1.state, ket1.keys)
+
+        if ep1.meas_res == 0:
+            counter += 1
+            assert complex_array_equal(phi_minus, state)
+        else:
+            assert complex_array_equal([-sqrt_2, 0, 0, sqrt_2], state)
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_phi_minus_psi_minus_X_measurement():
+    """
+    phi- psi-
+     0b0
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b1
+         [0.5+0.j 0. +0.j 0. +0.j 0.5+0.j]
+     0b10
+         [-0.5+0.j  0. +0.j  0. +0.j -0.5+0.j]
+     0b11
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(phi_minus, psi_minus, i, 'X')
+        assert kept1.entangled_memory == kept2.entangled_memory == {'node_id': None, 'memo_id': None}
+        assert ep1.meas_res != ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) != id(ket2)
+        assert len(ket1.keys) == len(ket2.keys) == 1
+
+        if ep1.meas_res == 0:
+            counter += 1
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_psi_plus_phi_plus_X_measurement():
+    """
+    psi+ phi+
+     0b0
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b1
+         [0. +0.j 0.5+0.j 0.5+0.j 0. +0.j]
+     0b10
+         [0. +0.j 0.5+0.j 0.5+0.j 0. +0.j]
+     0b11
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(psi_plus, phi_plus, i, 'X')
+        assert kept1.entangled_memory == {'node_id': 'a2', 'memo_id': 'kept2'}
+        assert kept2.entangled_memory == {'node_id': 'a1', 'memo_id': 'kept1'}
+        assert ep1.meas_res == ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) == id(ket2)
+        assert kept1.qstate_key in ket1.keys and kept2.qstate_key in ket1.keys
+        state = correct_order(ket1.state, ket1.keys)
+
+        if ep1.meas_res == 0:
+            counter += 1
+            assert complex_array_equal(psi_plus, state)
+        else:
+            assert complex_array_equal([0, -sqrt_2, -sqrt_2, 0], state)
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_psi_plus_phi_minus_X_measurement():
+    """
+    psi+ phi-
+     0b0
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b1
+         [ 0. +0.j -0.5+0.j  0.5+0.j  0. +0.j]
+     0b10
+         [ 0. +0.j  0.5+0.j -0.5+0.j  0. +0.j]
+     0b11
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(psi_plus, phi_minus, i, 'X')
+        assert kept1.entangled_memory == kept2.entangled_memory == {'node_id': None, 'memo_id': None}
+        assert ep1.meas_res != ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) != id(ket2)
+        assert len(ket1.keys) == len(ket2.keys) == 1
+
+        if ep1.meas_res == 0:
+            counter += 1
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_psi_minus_phi_plus_X_measurement():
+    """
+    psi- phi+
+     0b0
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b1
+         [ 0. +0.j  0.5+0.j -0.5+0.j  0. +0.j]
+     0b10
+         [ 0. +0.j  0.5+0.j -0.5+0.j  0. +0.j]
+     0b11
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(psi_minus, phi_plus, i, 'X')
+        assert kept1.entangled_memory == {'node_id': 'a2', 'memo_id': 'kept2'}
+        assert kept2.entangled_memory == {'node_id': 'a1', 'memo_id': 'kept1'}
+        assert ep1.meas_res == ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) == id(ket2)
+        assert kept1.qstate_key in ket1.keys and kept2.qstate_key in ket1.keys
+        state = correct_order(ket1.state, ket1.keys)
+
+        if ep1.meas_res == 0:
+            counter += 1
+            assert complex_array_equal(psi_minus, state)
+        else:
+            assert complex_array_equal([0, -sqrt_2, sqrt_2, 0], state)
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_psi_minus_phi_minus_X_measurement():
+    """
+    psi- phi-
+     0b0
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b1
+         [ 0. +0.j -0.5+0.j -0.5+0.j  0. +0.j]
+     0b10
+         [0. +0.j 0.5+0.j 0.5+0.j 0. +0.j]
+     0b11
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(psi_minus, phi_minus, i, 'X')
+        assert kept1.entangled_memory == kept2.entangled_memory == {'node_id': None, 'memo_id': None}
+        assert ep1.meas_res != ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) != id(ket2)
+        assert len(ket1.keys) == len(ket2.keys) == 1
+
+        if ep1.meas_res == 0:
+            counter += 1
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_psi_plus_psi_plus_X_measurement():
+    """
+    psi+ psi+
+     0b0
+         [0. +0.j 0.5+0.j 0.5+0.j 0. +0.j]
+     0b1
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b10
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b11
+         [0. +0.j 0.5+0.j 0.5+0.j 0. +0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(psi_plus, psi_plus, i, 'X')
+        assert kept1.entangled_memory == {'node_id': 'a2', 'memo_id': 'kept2'}
+        assert kept2.entangled_memory == {'node_id': 'a1', 'memo_id': 'kept1'}
+        assert ep1.meas_res == ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) == id(ket2)
+        assert kept1.qstate_key in ket1.keys and kept2.qstate_key in ket1.keys
+        state = correct_order(ket1.state, ket1.keys)
+
+        if ep1.meas_res == 0:
+            counter += 1
+        assert complex_array_equal(psi_plus, state)
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_psi_plus_psi_minus_X_measurement():
+    """
+    psi+ psi-
+     0b0
+         [ 0. +0.j  0.5+0.j -0.5+0.j  0. +0.j]
+     0b1
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b10
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b11
+         [ 0. +0.j -0.5+0.j  0.5+0.j  0. +0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(psi_plus, psi_minus, i, 'X')
+        assert kept1.entangled_memory == kept2.entangled_memory == {'node_id': None, 'memo_id': None}
+        assert ep1.meas_res != ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) != id(ket2)
+        assert len(ket1.keys) == len(ket2.keys) == 1
+
+        if ep1.meas_res == 0:
+            counter += 1
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_psi_minus_psi_plus_X_measurement():
+    """
+    psi- psi+
+     0b0
+         [ 0. +0.j  0.5+0.j -0.5+0.j  0. +0.j]
+     0b1
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b10
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b11
+         [ 0. +0.j  0.5+0.j -0.5+0.j  0. +0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(psi_minus, psi_plus, i, 'X')
+        assert kept1.entangled_memory == {'node_id': 'a2', 'memo_id': 'kept2'}
+        assert kept2.entangled_memory == {'node_id': 'a1', 'memo_id': 'kept1'}
+        assert ep1.meas_res == ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) == id(ket2)
+        assert kept1.qstate_key in ket1.keys and kept2.qstate_key in ket1.keys
+
+        state = correct_order(ket1.state, ket1.keys)
+        assert complex_array_equal(psi_minus, state)
+        if ep1.meas_res == 0:
+            counter += 1
+        else:
+            # assert quantum state
+            pass
+
+    assert abs(counter - 50) < 10
+
+
+def test_BBPSSW_psi_minus_psi_minus_X_measurement():
+    """
+    psi- psi-
+     0b0
+         [0. +0.j 0.5+0.j 0.5+0.j 0. +0.j]
+     0b1
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b10
+         [0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     0b11
+         [ 0. +0.j -0.5+0.j -0.5+0.j  0. +0.j]
+    """
+    counter = 0
+    for i in range(100):
+        tl, kept1, kept2, meas1, meas2, ep1, ep2 = create_scenario(psi_minus, psi_minus, i, 'X')
+        assert kept1.entangled_memory == kept2.entangled_memory == {'node_id': None, 'memo_id': None}
+        assert ep1.meas_res != ep2.meas_res
+
+        ket1 = tl.quantum_manager.get(kept1.qstate_key)
+        ket2 = tl.quantum_manager.get(kept2.qstate_key)
+        assert id(ket1) != id(ket2)
+        assert len(ket1.keys) == len(ket2.keys) == 1
+
+        if ep1.meas_res == 0:
+            counter += 1
+
     assert abs(counter - 50) < 10
 
 

@@ -63,11 +63,7 @@ class BBPSSW(EntanglementProtocol):
         meas_res (int): measurement result from circuit.
     """
 
-    circuit = Circuit(2)
-    circuit.cx(0, 1)
-    circuit.measure(1)
-
-    def __init__(self, own: "Node", name: str, kept_memo: "Memory", meas_memo: "Memory"):
+    def __init__(self, own: "Node", name: str, kept_memo: "Memory", meas_memo: "Memory", basis: str = 'Z'):
         """Constructor for purification protocol.
 
         Args:
@@ -75,6 +71,7 @@ class BBPSSW(EntanglementProtocol):
             name (str): name of protocol instance.
             kept_memo (Memory): memory to have fidelity improved.
             meas_memo (Memory): memory to measure and discard.
+            basis (str): Pauli measurement basis (e.g. X, Y, Z).
         """
 
         assert kept_memo != meas_memo
@@ -82,10 +79,24 @@ class BBPSSW(EntanglementProtocol):
         self.memories = [kept_memo, meas_memo]
         self.kept_memo = kept_memo
         self.meas_memo = meas_memo
+        self._basis = basis
         self.another = None
         self.meas_res = None
         if self.meas_memo is None:
             self.memories.pop()
+
+        self.circuit = self._get_circuit()
+
+    def _get_circuit(self) -> Circuit:
+        circuit = Circuit(2)
+        circuit.cx(0, 1)
+
+        if self._basis == 'X':
+            circuit.h(1)
+
+        circuit.measure(1)
+
+        return circuit
 
     def is_ready(self) -> bool:
         return self.another is not None
