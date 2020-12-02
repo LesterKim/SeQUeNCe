@@ -490,13 +490,13 @@ def test_BBPSSW_psi_plus_psi_plus():
         ket2 = tl.quantum_manager.get(kept2.qstate_key)
         assert id(ket1) == id(ket2)
         assert kept1.qstate_key in ket1.keys and kept2.qstate_key in ket1.keys
-        state = correct_order(ket1.state, ket1.keys)
 
+        state = correct_order(ket1.state, ket1.keys)
+        assert complex_array_equal(psi_plus, state)
         if ep1.meas_res == 0:
             counter += 1
-            assert complex_array_equal(psi_plus, state)
         else:
-            assert complex_array_equal(psi_plus, state)
+            pass
 
     assert abs(counter - 50) < 10
 
